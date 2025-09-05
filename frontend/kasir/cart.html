@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Keranjang</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background:#f8fafc; padding:1.25rem; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; }
+    .small-muted { font-size:.9rem; color:#6b7280; }
+    .qty-input { width:84px; }
+    .empty-note { color:#7c7c7c; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h4 class="mb-0">Keranjang Belanja</h4>
+      <div>
+        <a href="kasir.html" class="btn btn-outline-secondary btn-sm">Kembali ke Kasir</a>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-lg-8">
+        <div class="card p-3 mb-3">
+          <div id="cartArea"></div>
+        </div>
+      </div>
+
+      <div class="col-lg-4">
+        <div class="card p-3 mb-3">
+          <h6 class="mb-3">Ringkasan Pembayaran</h6>
+          <div class="d-flex justify-content-between small-muted mb-1"><div>Subtotal</div><div id="subtotal">Rp 0</div></div>
+          <div class="d-flex justify-content-between small-muted mb-1"><div>Biaya (metode)</div><div id="fee">Rp 0</div></div>
+          <hr/>
+          <div class="d-flex justify-content-between fw-bold fs-5 mb-3"><div>Total</div><div id="total">Rp 0</div></div>
+
+          <label class="form-label small-muted mb-1">Metode pembayaran</label>
+          <select id="paymentMethod" class="form-select form-select-sm mb-3">
+            <option value="cash" data-fee="0">Tunai — Rp 0</option>
+            <option value="ewallet" data-fee="2000">E-Wallet — Rp 2.000</option>
+            <option value="card" data-fee="5000">Kartu — Rp 5.000</option>
+          </select>
+
+          <div class="d-grid gap-2">
+            <button id="checkoutBtn" class="btn btn-success">Checkout & Cetak Struk</button>
+            <button id="clearBtn" class="btn btn-outline-danger">Kosongkan Keranjang</button>
+            <button id="closeBtn" class="btn btn-outline-secondary">Tutup</button>
+          </div>
+        </div>
+
+        <div class="card p-3">
+          <h6 class="mb-2">Catatan</h6>
+          <ul class="small-muted mb-0">
+            <li>Ubah jumlah langsung pada kolom jumlah.</li>
+            <li>Checkout menyimpan order terakhir lalu membuka halaman struk.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const CART_KEY = 'mywarung_cart_v1';
+  const LAST_ORDER_KEY = 'mywarung_lastorder_v1';
+
+  function formatRp(n){ if(!Number.isFinite(n)) n = 0; return 'Rp ' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, "."); }
+  function loadCart(){ try { return JSON.parse(localStorage.getItem(CART_KEY) || '[]'); } catch(e){ return []; } }
+  function saveCart(c){ localStorage.setItem(CART_KEY, JSON.stringify(c)); window.dispatchEvent(new Event('storage')); }
+  function clearCart(){ localStorage.removeItem(CART_KEY); window.dispatchEvent(new Event('storage')); }
+
+  const cartArea = document.getElementById('cartArea');
+  const subtotalEl = document.getElementById('subtotal');
+  const feeEl = document.getElementById('fee');
+  const totalEl = document.getElementById('total');
+  const paymentMethodEl = document.getElementById('paymentMethod');
+
+  function render(){
+    const cart = loadCart();
+    if(cart.length === 0){
+      cartArea.innerHTML = '<div class="text-center py-5 empty-note">Keranjang kosong — tambahkan produk dari kasir.</div>';
+    } else {
+      let html = '<ul class="list-group">';
+      cart.forEach(it=>{
+        html += `<li class="list-group-item d-flex justify-content-between align-items-center">
+          <div style="max-width:70%">
+            <div class="fw-semibold">${it.name}</div>
+            <div class="small-muted">${formatRp(it.price)} / pcs</div>
+          </div>
+          <div class="text-end" style="min-width:220px">
+            <div class="mb-2">${formatRp(it.price * it.qty)}</div>
+            <div class="d-flex justify-content-end align-items-center gap-2">
+              <input type="number" class="form-control form-control-sm qty-input" min="1" value="${it.qty}" data-id="${it.id}">
+              <button class="btn btn-sm btn-outline-danger remove-btn" data-id="${it.id}">Hapus</button>
+            </div>
+          </div>
+        </li>`;
+      });
+      html += '</ul>';
+      cartArea.innerHTML = html;
+
+      cartArea.querySelectorAll('.qty-input').forEach(inp=>{
+        inp.addEventListener('change', (e)=>{
+          const id = Number(e.target.dataset.id);
+          let v = parseInt(e.target.value) || 1; if(v < 1) v = 1;
+          const c = loadCart();
+          const item = c.find(x => x.id === id);
+          if(item){ item.qty = v; saveCart(c); render(); }
+        });
+      });
+      cartArea.querySelectorAll('.remove-btn').forEach(b=>{
+        b.addEventListener('click', ()=>{
+          const id = Number(b.dataset.id);
+          let c = loadCart();
+          c = c.filter(x => x.id !== id);
+          saveCart(c); render();
+        });
+      });
+    }
+    updateTotals();
+  }
+
+  function calcSubtotal(cart){ return cart.reduce((s, it) => s + (it.price * it.qty), 0); }
+  function updateTotals(){
+    const cart = loadCart();
+    const subtotal = calcSubtotal(cart);
+    const fee = Number(paymentMethodEl.selectedOptions[0].dataset.fee || 0);
+    const total = subtotal + fee;
+    subtotalEl.textContent = formatRp(subtotal);
+    feeEl.textContent = formatRp(fee);
+    totalEl.textContent = formatRp(total);
+  }
+
+  document.getElementById('clearBtn').addEventListener('click', ()=>{
+    if(confirm('Kosongkan keranjang?')){ clearCart(); render(); }
+  });
+
+  document.getElementById('checkoutBtn').addEventListener('click', ()=>{
+    const cart = loadCart();
+    if(cart.length === 0){ alert('Keranjang kosong'); return; }
+    const subtotal = calcSubtotal(cart);
+    const fee = Number(paymentMethodEl.selectedOptions[0].dataset.fee || 0);
+    const total = subtotal + fee;
+    const order = {
+      id: 'ORD' + Date.now(),
+      date: new Date().toISOString(),
+      items: cart,
+      subtotal, fee, total,
+      paymentMethod: paymentMethodEl.value
+    };
+    localStorage.setItem(LAST_ORDER_KEY, JSON.stringify(order));
+    clearCart();
+    render();
+    // buka receipt page
+    window.open('receipt.html', '_blank');
+  });
+
+  document.getElementById('closeBtn').addEventListener('click', ()=>{ try{ window.close(); }catch(e){} });
+
+  paymentMethodEl.addEventListener('change', updateTotals);
+  window.addEventListener('storage', ()=>{ render(); });
+
+  render();
+</script>
+</body>
+</html>

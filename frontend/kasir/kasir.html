@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kasir — My Warung</title>
+
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: #f2f6fb;
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+      padding: 1.25rem;
+    }
+    .product-card {
+      cursor: pointer;
+      transition: transform .12s ease, box-shadow .12s ease;
+      border: 1px solid #e6eef8;
+    }
+    .product-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 10px 30px rgba(15, 23, 42, .06);
+    }
+    .sidebar { position: sticky; top: 1.25rem; }
+    .price { font-weight: 700; }
+    .muted-xs { font-size: .88rem; color: #6b7280; }
+    .qty-control { width: 92px; }
+    .small-muted { font-size: .82rem; color: #6b7280; }
+    @media (max-width: 991px){
+      .sidebar { position: static; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h3 class="mb-0">My Warung</h3>
+      <div class="small-muted">Operator: <strong>Nell</strong></div>
+    </div>
+
+    <div class="row g-4">
+      <!-- Produk -->
+      <div class="col-lg-8">
+        <div class="d-flex gap-2 mb-3">
+          <input id="search" class="form-control form-control-sm" placeholder="Cari produk"/>
+          <select id="category" class="form-select form-select-sm w-auto">
+            <option value="all">Semua</option>
+            <option value="makanan">Makanan</option>
+            <option value="minuman">Minuman</option>
+            <option value="paket">Paket</option>
+          </select>
+          <button id="clearSearch" class="btn btn-outline-secondary btn-sm">Reset</button>
+        </div>
+        <div id="productList" class="row g-3"></div>
+      </div>
+
+      <!-- Keranjang -->
+      <div class="col-lg-4">
+        <div class="card p-3 sidebar">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h5 class="mb-0">Keranjang</h5>
+            <button id="clearCart" class="btn btn-sm btn-outline-danger">Kosongkan</button>
+          </div>
+
+          <div id="cartItems" style="min-height:140px" class="mb-2"></div>
+
+          <div class="d-flex justify-content-between small-muted">
+            <div>Subtotal</div><div id="subtotal">Rp 0</div>
+          </div>
+          <div class="d-flex justify-content-between small-muted">
+            <div>Biaya (metode)</div><div id="fee">Rp 0</div>
+          </div>
+          <hr/>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="small-muted">Total</div>
+            <div id="total" class="price fs-5">Rp 0</div>
+          </div>
+
+          <label class="form-label small-muted">Metode pembayaran</label>
+          <select id="paymentMethod" class="form-select form-select-sm mb-3">
+            <option value="cash" data-fee="0">Tunai — Rp 0</option>
+            <option value="ewallet" data-fee="2000">E-Wallet — Rp 2.000</option>
+            <option value="card" data-fee="5000">Kartu — Rp 5.000</option>
+          </select>
+
+          <div class="d-grid gap-2">
+            <button id="checkoutBtn" class="btn btn-success">Checkout & Cetak Struk</button>
+            <button id="openCartBtn" class="btn btn-outline-primary">Lihat Keranjang</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    // ======= API URL =======
+    const API_URL = "http://localhost:3000/api/products"; // Ganti sesuai backend
+
+    function formatRp(n){
+      if(!Number.isFinite(n)) n = 0;
+      return 'Rp ' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    }
+
+    // localStorage keys
+    const CART_KEY = 'mywarung_cart_v1';
+    const LAST_ORDER_KEY = 'mywarung_lastorder_v1';
+
+    function loadCart(){ try{ return JSON.parse(localStorage.getItem(CART_KEY) || '[]'); }catch(e){ return []; } }
+    function saveCart(c){ localStorage.setItem(CART_KEY, JSON.stringify(c)); window.dispatchEvent(new Event('storage')); }
+    function clearCart(){ localStorage.removeItem(CART_KEY); window.dispatchEvent(new Event('storage')); }
+
+    // ======= Render Produk =======
+    const productListEl = document.getElementById('productList');
+    function renderProducts(list){
+      productListEl.innerHTML = '';
+      if(list.length === 0){
+        productListEl.innerHTML = '<div class="col-12"><div class="p-4 text-center small-muted">Produk tidak ditemukan.</div></div>';
+        return;
+      }
+      list.forEach(p => {
+        const col = document.createElement('div');
+        col.className = 'col-sm-6 col-md-4';
+        col.innerHTML = `
+          <div class="p-2 product-card h-100" data-id="${p.id}">
+            <div class="fw-semibold">${p.name}</div>
+            <div class="muted-xs">${p.desc || ''}</div>
+            <div class="d-flex justify-content-between align-items-center mt-2">
+              <div class="price">${formatRp(p.price)}</div>
+              <button class="btn btn-sm btn-outline-primary add-btn">Tambah</button>
+            </div>
+          </div>
+        `;
+        productListEl.appendChild(col);
+        col.querySelector('.add-btn').addEventListener('click', ()=> addToCart(p));
+      });
+    }
+
+    async function loadProducts(){
+      try {
+        const res = await fetch(API_URL);
+        const data = await res.json();
+        renderProducts(data);
+      } catch (err) {
+        console.error("Gagal ambil produk:", err);
+        productListEl.innerHTML = '<p class="text-danger">Produk gagal dimuat.</p>';
+      }
+    }
+
+    // ======= Cart =======
+    const cartItemsEl = document.getElementById('cartItems');
+    const subtotalEl = document.getElementById('subtotal');
+    const feeEl = document.getElementById('fee');
+    const totalEl = document.getElementById('total');
+    const paymentMethodEl = document.getElementById('paymentMethod');
+
+    function renderCart(){
+      const cart = loadCart();
+      if(cart.length === 0){
+        cartItemsEl.innerHTML = '<div class="text-muted">Keranjang kosong</div>';
+      } else {
+        cartItemsEl.innerHTML = '';
+        cart.forEach(item => {
+          const row = document.createElement('div');
+          row.className = 'd-flex align-items-center mb-2';
+          row.innerHTML = `
+            <div class="flex-grow-1">
+              <div class="fw-semibold">${item.name}</div>
+              <div class="muted-xs">${formatRp(item.price)} x 
+                <input type="number" class="form-control form-control-sm qty-control ms-2" min="1" value="${item.qty}" data-id="${item.id}">
+              </div>
+            </div>
+            <div class="text-end ms-3">
+              <div class="price">${formatRp(item.price * item.qty)}</div>
+              <button class="btn btn-sm btn-link text-danger remove-btn" data-id="${item.id}">Hapus</button>
+            </div>
+          `;
+          cartItemsEl.appendChild(row);
+        });
+
+        cartItemsEl.querySelectorAll('.qty-control').forEach(inp=>{
+          inp.addEventListener('change', (e)=>{
+            const id = Number(e.target.dataset.id);
+            let v = parseInt(e.target.value) || 1; if(v < 1) v = 1;
+            const c = loadCart();
+            const it = c.find(x=>x.id === id);
+            if(it){ it.qty = v; saveCart(c); renderCart(); }
+          });
+        });
+        cartItemsEl.querySelectorAll('.remove-btn').forEach(b=>{
+          b.addEventListener('click', ()=>{
+            const id = Number(b.dataset.id);
+            let c = loadCart();
+            c = c.filter(x=>x.id !== id);
+            saveCart(c); renderCart();
+          });
+        });
+      }
+      updateTotals();
+    }
+
+    function addToCart(product){
+      const cart = loadCart();
+      const idx = cart.findIndex(x=>x.id === product.id);
+      if(idx > -1) cart[idx].qty += 1;
+      else cart.push({ id: product.id, name: product.name, price: product.price, qty: 1 });
+      saveCart(cart);
+      renderCart();
+    }
+
+    function calcSubtotal(cart){
+      return cart.reduce((s, it) => s + (it.price * it.qty), 0);
+    }
+
+    function updateTotals(){
+      const cart = loadCart();
+      const subtotal = calcSubtotal(cart);
+      const fee = Number(paymentMethodEl.selectedOptions[0].dataset.fee || 0);
+      const total = subtotal + fee;
+      subtotalEl.textContent = formatRp(subtotal);
+      feeEl.textContent = formatRp(fee);
+      totalEl.textContent = formatRp(total);
+    }
+
+    // ======= Checkout =======
+    function doCheckout(){
+      const cart = loadCart();
+      if(cart.length === 0){ alert('Keranjang kosong'); return; }
+      const subtotal = calcSubtotal(cart);
+      const fee = Number(paymentMethodEl.selectedOptions[0].dataset.fee || 0);
+      const total = subtotal + fee;
+      const order = {
+        id: 'ORD' + Date.now(),
+        date: new Date().toISOString(),
+        items: cart,
+        subtotal, fee, total,
+        paymentMethod: paymentMethodEl.value
+      };
+      localStorage.setItem(LAST_ORDER_KEY, JSON.stringify(order));
+      clearCart();
+      window.location.href = 'receipt.html';
+    }
+
+    // ======= UI events =======
+    document.getElementById('checkoutBtn').addEventListener('click', doCheckout);
+    document.getElementById('openCartBtn').addEventListener('click', ()=>{ window.location.href = 'cart.html'; });
+    document.getElementById('clearCart').addEventListener('click', ()=>{ if(confirm('Kosongkan keranjang?')) clearCart(); renderCart(); });
+    document.getElementById('clearSearch').addEventListener('click', ()=>{ document.getElementById('search').value=''; document.getElementById('category').value='all'; loadProducts(); });
+
+    paymentMethodEl.addEventListener('change', updateTotals);
+    document.getElementById('search').addEventListener('input', (e)=>{
+      const q = e.target.value.trim().toLowerCase();
+      const cat = document.getElementById('category').value;
+      fetch(API_URL)
+        .then(res=>res.json())
+        .then(data=>{
+          let filtered = data.filter(p => p.name.toLowerCase().includes(q) || (p.desc||'').toLowerCase().includes(q));
+          if(cat !== 'all') filtered = filtered.filter(p => p.category === cat);
+          renderProducts(filtered);
+        });
+    });
+    document.getElementById('category').addEventListener('change', ()=>{ document.getElementById('search').dispatchEvent(new Event('input')); });
+
+    // init
+    loadProducts();
+    renderCart();
+    window.addEventListener('storage', ()=>{ renderCart(); });
+  </script>
+</body>
+</html>

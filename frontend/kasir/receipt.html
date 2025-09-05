@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Struk — My Warung</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    :root { --muted: #6b7280; }
+    body { background:#f4f7fb; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; padding:18px; }
+    .receipt-card { max-width:480px; margin:0 auto; }
+    .muted-xs { color: var(--muted); font-size: .9rem; }
+    .store-name { font-weight:700; font-size:1.15rem; }
+    .line-item { display:flex; justify-content:space-between; gap:12px; }
+    .item-left { max-width:70%; }
+    .item-right { text-align:right; min-width:90px; }
+    .tiny { font-size:.85rem; color:var(--muted); }
+    .print-hide { display:inline-block; }
+    @media print { .print-hide { display:none !important; } .receipt-card { width:100%; max-width:400px; margin:0; } }
+    .hr { height:1px; background:#e6eef8; margin:8px 0; border-radius:2px; }
+  </style>
+</head>
+<body>
+  <div class="receipt-card card p-3">
+    <div class="d-flex justify-content-between align-items-start mb-2">
+      <div>
+        <div class="store-name">My Warung</div>
+        <div class="muted-xs">Jl. Contoh No.1 — Telp: 0812-xxx-xxxx</div>
+      </div>
+      <div class="text-end tiny">
+        <div id="orderId">-</div>
+        <div id="orderDate" class="muted-xs"></div>
+      </div>
+    </div>
+
+    <div id="itemsArea" class="mb-2"></div>
+    <div class="hr"></div>
+
+    <div class="mb-1">
+      <div class="d-flex justify-content-between small-muted">
+        <div>Subtotal</div>
+        <div id="subtotal">Rp 0</div>
+      </div>
+      <div class="d-flex justify-content-between small-muted">
+        <div>Biaya</div>
+        <div id="fee">Rp 0</div>
+      </div>
+      <div class="d-flex justify-content-between fw-bold fs-5">
+        <div>Total</div>
+        <div id="total">Rp 0</div>
+      </div>
+      <div class="muted-xs mt-1">Metode: <span id="paymentMethod">-</span></div>
+    </div>
+
+    <div class="mt-3 d-flex gap-2 print-hide">
+      <button id="printBtn" class="btn btn-primary">Cetak / Print</button>
+      <button id="downloadPdf" class="btn btn-outline-secondary">Simpan PDF</button>
+      <a href="kasir.html" class="btn btn-outline-secondary">Kembali ke Kasir</a>
+    </div>
+
+    <div class="mt-3 tiny text-center muted-xs">
+      Terima kasih telah berbelanja — My Warung
+    </div>
+  </div>
+
+<script>
+  const LAST_ORDER_KEY = 'mywarung_lastorder_v1';
+  function formatRp(n){ if(!Number.isFinite(n)) n = 0; return 'Rp ' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, "."); }
+  function loadLastOrder(){ try { return JSON.parse(localStorage.getItem(LAST_ORDER_KEY) || 'null'); } catch(e){ return null; } }
+
+  function render(){
+    const order = loadLastOrder();
+    const itemsArea = document.getElementById('itemsArea');
+    const orderIdEl = document.getElementById('orderId');
+    const orderDateEl = document.getElementById('orderDate');
+    const subtotalEl = document.getElementById('subtotal');
+    const feeEl = document.getElementById('fee');
+    const totalEl = document.getElementById('total');
+    const paymentMethodEl = document.getElementById('paymentMethod');
+
+    if(!order){
+      itemsArea.innerHTML = '<div class="text-center py-4 muted-xs">Tidak ada data struk. Lakukan checkout di halaman kasir atau cart dulu.</div>';
+      orderIdEl.textContent = '-'; orderDateEl.textContent = ''; subtotalEl.textContent = formatRp(0);
+      feeEl.textContent = formatRp(0); totalEl.textContent = formatRp(0); paymentMethodEl.textContent = '-';
+      return;
+    }
+    orderIdEl.textContent = order.id || '-';
+    orderDateEl.textContent = new Date(order.date).toLocaleString();
+
+    let html = '';
+    order.items.forEach(it=>{
+      html += `<div class="line-item mb-2"><div class="item-left"><div class="fw-semibold">${it.name}</div><div class="muted-xs">x${it.qty} @ ${formatRp(it.price)}</div></div><div class="item-right">${formatRp(it.price * it.qty)}</div></div>`;
+    });
+    itemsArea.innerHTML = html;
+
+    subtotalEl.textContent = formatRp(order.subtotal || 0);
+    feeEl.textContent = formatRp(order.fee || 0);
+    totalEl.textContent = formatRp(order.total || order.subtotal || 0);
+    paymentMethodEl.textContent = (order.paymentMethod || 'Tunai').toUpperCase();
+  }
+
+  document.getElementById('printBtn').addEventListener('click', ()=>{
+    const el = document.querySelector('.receipt-card');
+    const w = window.open('', 'printwin', 'height=700,width=420');
+    w.document.write('<html><head><title>Struk</title>');
+    w.document.write('<meta charset="utf-8"/>');
+    w.document.write('<style>body{font-family:Arial, sans-serif;padding:10px;font-size:12px} .muted-xs{color:#6b7280;font-size:11px} .line-item{display:flex;justify-content:space-between;margin-bottom:6px}</style>');
+    w.document.write('</head><body>');
+    w.document.write(el.innerHTML);
+    w.document.write('</body></html>');
+    w.document.close();
+    w.focus();
+    setTimeout(()=>{ w.print(); }, 250);
+  });
+
+  document.getElementById('downloadPdf').addEventListener('click', ()=>{ window.print(); });
+  window.addEventListener('storage', ()=>{ render(); });
+  render();
+</script>
+</body>
+</html>
