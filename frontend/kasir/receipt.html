@@ -1,3 +1,4 @@
+<!-- ganti file receipt.html dengan isi di bawah -->
 <!doctype html>
 <html lang="id">
 <head>
@@ -18,9 +19,18 @@
     .print-hide { display:inline-block; }
     @media print { .print-hide { display:none !important; } .receipt-card { width:100%; max-width:400px; margin:0; } }
     .hr { height:1px; background:#e6eef8; margin:8px 0; border-radius:2px; }
+    .back-btn { margin-bottom: 0.75rem; }
+    .top-actions { display:flex; gap:8px; align-items:center; margin-bottom:10px; }
   </style>
 </head>
 <body>
+  <div class="container">
+    <div class="top-actions">
+      <button id="backBtn" class="btn btn-outline-secondary btn-sm back-btn">← Kembali</button>
+      <button id="logoutBtn" class="btn btn-outline-secondary btn-sm">Logout</button>
+    </div>
+  </div>
+
   <div class="receipt-card card p-3">
     <div class="d-flex justify-content-between align-items-start mb-2">
       <div>
@@ -64,6 +74,20 @@
   </div>
 
 <script>
+  // Back button
+  document.getElementById('backBtn').addEventListener('click', () => {
+    if (history.length > 1) history.back();
+    else window.location.href = "kasir.html";
+  });
+
+  // Logout
+  document.getElementById('logoutBtn').addEventListener('click', ()=>{
+    localStorage.removeItem('token');
+    localStorage.removeItem('role');
+    window.location.href = '../login.html'; // sesuaikan path jika perlu
+  });
+
+  // (rest of JS same as before; keep receipt rendering code you had)
   const LAST_ORDER_KEY = 'mywarung_lastorder_v1';
   function formatRp(n){ if(!Number.isFinite(n)) n = 0; return 'Rp ' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, "."); }
   function loadLastOrder(){ try { return JSON.parse(localStorage.getItem(LAST_ORDER_KEY) || 'null'); } catch(e){ return null; } }
@@ -84,19 +108,35 @@
       feeEl.textContent = formatRp(0); totalEl.textContent = formatRp(0); paymentMethodEl.textContent = '-';
       return;
     }
-    orderIdEl.textContent = order.id || '-';
-    orderDateEl.textContent = new Date(order.date).toLocaleString();
 
-    let html = '';
-    order.items.forEach(it=>{
-      html += `<div class="line-item mb-2"><div class="item-left"><div class="fw-semibold">${it.name}</div><div class="muted-xs">x${it.qty} @ ${formatRp(it.price)}</div></div><div class="item-right">${formatRp(it.price * it.qty)}</div></div>`;
-    });
-    itemsArea.innerHTML = html;
+    orderIdEl.textContent = order.id || order.order_id || '-';
+    const orderDateRaw = order.created_at || order.date || order.date_iso || order.order_date;
+    orderDateEl.textContent = orderDateRaw ? new Date(orderDateRaw).toLocaleString() : '';
+
+    // items may be array or JSON string depending on how DB returns it
+    let itemsArr = [];
+    if (Array.isArray(order.items)) itemsArr = order.items;
+    else if (typeof order.items === 'string') {
+      try { itemsArr = JSON.parse(order.items); } catch(e){ itemsArr = []; }
+    } else itemsArr = [];
+
+    if (itemsArr.length === 0) {
+      itemsArea.innerHTML = '<div class="text-center muted-xs">Tidak ada item.</div>';
+    } else {
+      let html = '';
+      itemsArr.forEach(it=>{
+        const qty = it.qty || it.quantity || 0;
+        const price = it.price || it.unit_price || 0;
+        const name = it.name || it.label || '-';
+        html += `<div class="line-item mb-2"><div class="item-left"><div class="fw-semibold">${name}</div><div class="muted-xs">x${qty} @ ${formatRp(price)}</div></div><div class="item-right">${formatRp(price * qty)}</div></div>`;
+      });
+      itemsArea.innerHTML = html;
+    }
 
     subtotalEl.textContent = formatRp(order.subtotal || 0);
     feeEl.textContent = formatRp(order.fee || 0);
     totalEl.textContent = formatRp(order.total || order.subtotal || 0);
-    paymentMethodEl.textContent = (order.paymentMethod || 'Tunai').toUpperCase();
+    paymentMethodEl.textContent = (order.paymentMethod || order.payment_method || 'Tunai').toString().toUpperCase();
   }
 
   document.getElementById('printBtn').addEventListener('click', ()=>{

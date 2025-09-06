@@ -8,18 +8,20 @@
   <style>
     body { background:#f4f7fb; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; padding:1.25rem; }
     .card { border-radius: 1rem; }
+    .back-btn { margin-right: 0.5rem; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="d-flex justify-content-between align-items-center mb-4">
-      <h3 class="mb-0">Kelola Produk</h3>
-      <button id="logoutBtn" class="btn btn-outline-secondary btn-sm">Keluar</button>
-    </div>
-
-    <!-- Tombol Tambah Produk -->
-    <div class="mb-3">
-      <button id="addProductBtn" class="btn btn-primary">Tambah Produk</button>
+      <div class="d-flex align-items-center">
+        <button id="backBtn" class="btn btn-outline-secondary btn-sm back-btn">← Kembali</button>
+        <h3 class="mb-0">Kelola Produk</h3>
+      </div>
+      <div>
+        <button id="addProductBtn" class="btn btn-primary me-2">Tambah Produk</button>
+        <button id="logoutBtn" class="btn btn-outline-secondary btn-sm">Keluar</button>
+      </div>
     </div>
 
     <!-- Tabel Produk -->
@@ -32,12 +34,11 @@
                 <th>#</th>
                 <th>Nama Produk</th>
                 <th>Harga</th>
-                <th>Stok</th>
                 <th>Aksi</th>
               </tr>
             </thead>
             <tbody id="productTableBody">
-              <tr><td colspan="5" class="text-center">Memuat data...</td></tr>
+              <tr><td colspan="4" class="text-center">Memuat data...</td></tr>
             </tbody>
           </table>
         </div>
@@ -45,11 +46,56 @@
     </div>
   </div>
 
+  <!-- Modal Add/Edit Product -->
+  <div class="modal fade" id="productModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <form id="productForm" class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="productModalTitle">Tambah Produk</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="productId" />
+          <div class="mb-3">
+            <label class="form-label">Nama</label>
+            <input id="productName" class="form-control" required />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Harga</label>
+            <input id="productPrice" type="number" class="form-control" required />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Kategori</label>
+            <input id="productCategory" class="form-control" />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Deskripsi</label>
+            <textarea id="productDesc" class="form-control" rows="3"></textarea>
+          </div>
+          <div id="productMsg" class="text-danger small"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+          <button type="submit" class="btn btn-primary" id="productSubmitBtn">Simpan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
   const token = localStorage.getItem("token");
   const role = localStorage.getItem("role");
+  const productModalEl = document.getElementById('productModal');
+  const productModal = new bootstrap.Modal(productModalEl);
 
-  // Cek token & role
+  // Back button
+  document.getElementById('backBtn').addEventListener('click', () => {
+    if (history.length > 1) history.back();
+    else window.location.href = "dashboard.html";
+  });
+
+  // Check auth
   if (!token || role !== "admin") {
     alert("Anda tidak memiliki akses.");
     window.location.href = "../login.html";
@@ -60,7 +106,6 @@
     window.location.href = "../login.html";
   });
 
-  // Fungsi Format Rupiah
   function formatRp(n){
     if(!Number.isFinite(n)) n = 0;
     return 'Rp ' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
@@ -69,7 +114,7 @@
   async function loadProducts(){
     try {
       const res = await fetch("/api/products", {
-        headers: { "Authorization": `Bearer ${token}` }
+        headers: { "Authorization": `Bearer ${token}` } // optional
       });
 
       if (!res.ok) {
@@ -87,7 +132,7 @@
       tbody.innerHTML = "";
 
       if (products.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">Belum ada produk</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">Belum ada produk</td></tr>`;
         return;
       }
 
@@ -97,16 +142,17 @@
           <td>${i+1}</td>
           <td>${p.name}</td>
           <td>${formatRp(p.price)}</td>
-          <td>${p.stock}</td>
           <td>
-            <button class="btn btn-sm btn-warning me-1" onclick="editProduct('${p.id}')">Edit</button>
-            <button class="btn btn-sm btn-danger" onclick="deleteProduct('${p.id}')">Hapus</button>
+            <button class="btn btn-sm btn-warning me-1" onclick="openEditProduct(${p.id})">Edit</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteProduct(${p.id})">Hapus</button>
           </td>
         `;
         tbody.appendChild(tr);
       });
     } catch (err) {
       console.error("Error loadProducts:", err);
+      const tbody = document.getElementById("productTableBody");
+      tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">Gagal memuat data</td></tr>`;
     }
   }
 
@@ -117,7 +163,10 @@
         method: "DELETE",
         headers: { "Authorization": `Bearer ${token}` }
       });
-      if (!res.ok) throw new Error("Gagal menghapus produk");
+      if (!res.ok) {
+        const e = await res.json().catch(()=>({message:'Gagal'}));
+        throw new Error(e.message || "Gagal menghapus produk");
+      }
       loadProducts();
     } catch (err) {
       console.error(err);
@@ -125,17 +174,83 @@
     }
   }
 
-  function editProduct(id){
-    // Bisa diarahkan ke halaman edit atau popup form
-    alert("Fitur edit produk belum diimplementasi. ID: " + id);
-  }
-
-  // Tombol Tambah Produk (contoh redirect)
-  document.getElementById("addProductBtn").addEventListener("click", () => {
-    window.location.href = "add-product.html"; // pastikan file ini ada
+  // open add
+  document.getElementById('addProductBtn').addEventListener('click', ()=>{
+    document.getElementById('productModalTitle').textContent = 'Tambah Produk';
+    document.getElementById('productId').value = '';
+    document.getElementById('productName').value = '';
+    document.getElementById('productPrice').value = '';
+    document.getElementById('productCategory').value = '';
+    document.getElementById('productDesc').value = '';
+    document.getElementById('productMsg').textContent = '';
+    productModal.show();
   });
 
-  // Load data awal
+  // open edit
+  window.openEditProduct = async function(id){
+    try {
+      const res = await fetch(`/api/products/${id}`);
+      if (!res.ok) throw new Error('Gagal mengambil data produk');
+      const p = await res.json();
+      document.getElementById('productModalTitle').textContent = 'Edit Produk';
+      document.getElementById('productId').value = p.id;
+      document.getElementById('productName').value = p.name;
+      document.getElementById('productPrice').value = p.price;
+      document.getElementById('productCategory').value = p.category || '';
+      document.getElementById('productDesc').value = p.desc || p.description || '';
+      document.getElementById('productMsg').textContent = '';
+      productModal.show();
+    } catch (err) {
+      console.error(err);
+      alert('Gagal memuat data produk untuk edit');
+    }
+  };
+
+  // submit form
+  document.getElementById('productForm').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const id = document.getElementById('productId').value;
+    const name = document.getElementById('productName').value.trim();
+    const price = Number(document.getElementById('productPrice').value) || 0;
+    const category = document.getElementById('productCategory').value.trim();
+    const desc = document.getElementById('productDesc').value.trim();
+
+    if (!name) { document.getElementById('productMsg').textContent = 'Nama produk wajib'; return; }
+    document.getElementById('productMsg').textContent = '';
+    document.getElementById('productSubmitBtn').disabled = true;
+
+    try {
+      if (!id) {
+        // create (without stock)
+        const res = await fetch('/api/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ name, price, category, desc })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Gagal menambahkan produk');
+        productModal.hide();
+        loadProducts();
+      } else {
+        // update (without stock)
+        const res = await fetch(`/api/products/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ name, price, category, desc })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Gagal mengupdate produk');
+        productModal.hide();
+        loadProducts();
+      }
+    } catch (err) {
+      console.error(err);
+      document.getElementById('productMsg').textContent = err.message || 'Terjadi kesalahan';
+    } finally {
+      document.getElementById('productSubmitBtn').disabled = false;
+    }
+  });
+
   loadProducts();
 </script>
 </body>

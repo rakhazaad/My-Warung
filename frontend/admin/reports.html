@@ -8,12 +8,16 @@
   <style>
     body { background:#f4f7fb; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; padding:1.25rem; }
     .card { border-radius: 1rem; }
+    .back-btn { margin-right: 0.5rem; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="d-flex justify-content-between align-items-center mb-4">
-      <h3 class="mb-0">Laporan Penjualan</h3>
+      <div class="d-flex align-items-center">
+        <button id="backBtn" class="btn btn-outline-secondary btn-sm back-btn">← Kembali</button>
+        <h3 class="mb-0">Laporan Penjualan</h3>
+      </div>
       <button id="logoutBtn" class="btn btn-outline-secondary btn-sm">Keluar</button>
     </div>
 
@@ -51,6 +55,12 @@
 <script>
   const token = localStorage.getItem("token");
   const role = localStorage.getItem("role");
+
+  // Back button: jika ada histori, kembali; jika tidak, ke dashboard
+  document.getElementById('backBtn').addEventListener('click', () => {
+    if (history.length > 1) history.back();
+    else window.location.href = "dashboard.html";
+  });
 
   if (!token || role !== "admin") {
     alert("Anda tidak memiliki akses.");

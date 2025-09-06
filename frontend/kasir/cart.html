@@ -10,10 +10,17 @@
     .small-muted { font-size:.9rem; color:#6b7280; }
     .qty-input { width:84px; }
     .empty-note { color:#7c7c7c; }
+    .back-btn { margin-bottom: 0.75rem; }
+    .top-actions { display:flex; gap:8px; align-items:center; margin-bottom:10px; }
   </style>
 </head>
 <body>
   <div class="container">
+    <div class="top-actions">
+      <button id="backBtn" class="btn btn-outline-secondary btn-sm back-btn">← Kembali</button>
+      <button id="logoutBtn" class="btn btn-outline-secondary btn-sm">Logout</button>
+    </div>
+
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h4 class="mb-0">Keranjang Belanja</h4>
       <div>
@@ -62,6 +69,22 @@
   </div>
 
 <script>
+  // Back button: jika ada histori, kembali; jika tidak, ke kasir utama
+  document.getElementById('backBtn').addEventListener('click', () => {
+    if (history.length > 1) history.back();
+    else window.location.href = "kasir.html";
+  });
+
+  // Logout: hapus token & role lalu ke login
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    try {
+      localStorage.removeItem('token');
+      localStorage.removeItem('role');
+    } catch(e){}
+    // login.html berada di root frontend, dari folder kasir/ naik satu tingkat
+    window.location.href = "../login.html";
+  });
+
   const CART_KEY = 'mywarung_cart_v1';
   const LAST_ORDER_KEY = 'mywarung_lastorder_v1';
 
@@ -75,6 +98,7 @@
   const feeEl = document.getElementById('fee');
   const totalEl = document.getElementById('total');
   const paymentMethodEl = document.getElementById('paymentMethod');
+  const checkoutBtn = document.getElementById('checkoutBtn');
 
   function render(){
     const cart = loadCart();
@@ -132,28 +156,48 @@
     totalEl.textContent = formatRp(total);
   }
 
-  document.getElementById('clearBtn').addEventListener('click', ()=>{
-    if(confirm('Kosongkan keranjang?')){ clearCart(); render(); }
-  });
+  document.getElementById('clearBtn').addEventListener('click', ()=>{ if(confirm('Kosongkan keranjang?')){ clearCart(); render(); } });
 
-  document.getElementById('checkoutBtn').addEventListener('click', ()=>{
+  // ---------- POST to server on checkout ----------
+  checkoutBtn.addEventListener('click', async ()=>{
     const cart = loadCart();
     if(cart.length === 0){ alert('Keranjang kosong'); return; }
     const subtotal = calcSubtotal(cart);
     const fee = Number(paymentMethodEl.selectedOptions[0].dataset.fee || 0);
     const total = subtotal + fee;
-    const order = {
-      id: 'ORD' + Date.now(),
-      date: new Date().toISOString(),
-      items: cart,
-      subtotal, fee, total,
-      paymentMethod: paymentMethodEl.value
-    };
-    localStorage.setItem(LAST_ORDER_KEY, JSON.stringify(order));
-    clearCart();
-    render();
-    // buka receipt page
-    window.open('receipt.html', '_blank');
+    const payload = { items: cart, subtotal, fee, total, paymentMethod: paymentMethodEl.value };
+
+    checkoutBtn.disabled = true;
+    const prevText = checkoutBtn.textContent;
+    checkoutBtn.textContent = "Memproses...";
+
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        // try to read error message
+        const err = await res.json().catch(()=>({ message: 'Gagal menyimpan order' }));
+        throw new Error(err.message || 'Gagal menyimpan order');
+      }
+
+      const created = await res.json();
+      // simpan hasil dari server supaya receipt menunjukkan data server (termasuk created_at, order_id)
+      localStorage.setItem(LAST_ORDER_KEY, JSON.stringify(created));
+      clearCart();
+      render();
+      // buka receipt di tab baru
+      window.open('receipt.html', '_blank');
+    } catch (err) {
+      console.error('Checkout error:', err);
+      alert('Gagal menyimpan order ke server. Coba lagi.');
+    } finally {
+      checkoutBtn.disabled = false;
+      checkoutBtn.textContent = prevText;
+    }
   });
 
   document.getElementById('closeBtn').addEventListener('click', ()=>{ try{ window.close(); }catch(e){} });

@@ -82,9 +82,9 @@ app.post("/api/register", async (req, res) => {
     if (exist.rowCount > 0) return res.status(409).json({ message: "User sudah terdaftar" });
 
     const hashed = await bcrypt.hash(password, 10);
-    await query("INSERT INTO users (username, password, role) VALUES ($1,$2,$3)", [uname, hashed, _role]);
+    const r = await query("INSERT INTO users (username, password, role) VALUES ($1,$2,$3) RETURNING id, username, role", [uname, hashed, _role]);
 
-    return res.json({ message: "Registrasi berhasil" });
+    return res.json(r.rows[0]);
   } catch (err) {
     console.error("REGISTER ERROR:", err);
     return res.status(500).json({ message: "Gagal register" });
@@ -158,6 +158,7 @@ app.get("/api/admin/stats", authMiddleware, adminOnly, async (_req, res) => {
 });
 
 // --- USERS (admin only) ---
+// get list
 app.get("/api/users", authMiddleware, adminOnly, async (_req, res) => {
   try {
     const result = await query("SELECT id, username, role FROM users ORDER BY id ASC");
@@ -168,6 +169,20 @@ app.get("/api/users", authMiddleware, adminOnly, async (_req, res) => {
   }
 });
 
+// get single user (optional)
+app.get("/api/users/:id", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const r = await query("SELECT id, username, role FROM users WHERE id=$1", [id]);
+    if (r.rowCount === 0) return res.status(404).json({ message: "User tidak ditemukan" });
+    return res.json(r.rows[0]);
+  } catch (err) {
+    console.error("GET USER ERROR:", err);
+    return res.status(500).json({ message: "Gagal mengambil data user" });
+  }
+});
+
+// create
 app.post("/api/users", authMiddleware, adminOnly, async (req, res) => {
   try {
     const { username, password, role } = req.body;
@@ -178,11 +193,39 @@ app.post("/api/users", authMiddleware, adminOnly, async (req, res) => {
     if (exist.rowCount > 0) return res.status(409).json({ message: "Username sudah digunakan" });
 
     const hashed = await bcrypt.hash(password, 10);
-    await query("INSERT INTO users (username, password, role) VALUES ($1,$2,$3)", [uname, hashed, role || "user"]);
-    return res.json({ message: "User berhasil ditambahkan" });
+    const r = await query("INSERT INTO users (username, password, role) VALUES ($1,$2,$3) RETURNING id, username, role", [uname, hashed, role || "user"]);
+    return res.json(r.rows[0]);
   } catch (err) {
     console.error("CREATE USER ERROR:", err);
     return res.status(500).json({ message: "Gagal menambahkan user" });
+  }
+});
+
+// update
+app.put("/api/users/:id", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { username, password, role } = req.body;
+    const uname = (username || "").trim();
+    if (!uname) return res.status(400).json({ message: "Username wajib diisi" });
+
+    // check uniqueness (exclude current)
+    const exists = await query("SELECT 1 FROM users WHERE username=$1 AND id<>$2", [uname, id]);
+    if (exists.rowCount > 0) return res.status(409).json({ message: "Username sudah digunakan oleh user lain" });
+
+    if (password && password.trim() !== "") {
+      const hashed = await bcrypt.hash(password, 10);
+      const r = await query("UPDATE users SET username=$1, role=$2, password=$3 WHERE id=$4 RETURNING id, username, role", [uname, role || "user", hashed, id]);
+      if (r.rowCount === 0) return res.status(404).json({ message: "User tidak ditemukan" });
+      return res.json(r.rows[0]);
+    } else {
+      const r = await query("UPDATE users SET username=$1, role=$2 WHERE id=$3 RETURNING id, username, role", [uname, role || "user", id]);
+      if (r.rowCount === 0) return res.status(404).json({ message: "User tidak ditemukan" });
+      return res.json(r.rows[0]);
+    }
+  } catch (err) {
+    console.error("UPDATE USER ERROR:", err);
+    return res.status(500).json({ message: "Gagal mengupdate user" });
   }
 });
 
@@ -200,7 +243,8 @@ app.delete("/api/users/:id", authMiddleware, adminOnly, async (req, res) => {
 // --- PRODUCTS ---
 app.get("/api/products", async (_req, res) => {
   try {
-    const r = await query("SELECT id, name, price, category, description FROM products ORDER BY id ASC");
+    // return description as desc and stock (default 0) so frontend that expects p.desc / p.stock works
+    const r = await query("SELECT id, name, price, category, description AS desc, COALESCE(stock, 0) AS stock FROM products ORDER BY id ASC");
     return res.json(r.rows);
   } catch (err) {
     console.error("GET PRODUCTS ERROR:", err);
@@ -208,11 +252,28 @@ app.get("/api/products", async (_req, res) => {
   }
 });
 
+// get single product (for edit)
+app.get("/api/products/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const r = await query("SELECT id, name, price, category, description AS desc, COALESCE(stock,0) AS stock FROM products WHERE id=$1", [id]);
+    if (r.rowCount === 0) return res.status(404).json({ message: "Produk tidak ditemukan" });
+    return res.json(r.rows[0]);
+  } catch (err) {
+    console.error("GET PRODUCT ERROR:", err);
+    return res.status(500).json({ message: "Gagal mengambil data produk" });
+  }
+});
+
 app.post("/api/products", authMiddleware, adminOnly, async (req, res) => {
   try {
-    const { name, price, category, desc } = req.body;
-    await query("INSERT INTO products (name, price, category, description) VALUES ($1,$2,$3,$4)", [name, price, category, desc]);
-    return res.json({ message: "Produk ditambahkan" });
+    const { name, price, category, desc, stock } = req.body;
+    if (!name) return res.status(400).json({ message: "Nama produk wajib" });
+    const r = await query(
+      "INSERT INTO products (name, price, category, description, stock) VALUES ($1,$2,$3,$4,$5) RETURNING id, name, price, category, description AS desc, COALESCE(stock,0) AS stock",
+      [name, price || 0, category || "", desc || "", Number.isFinite(stock) ? stock : 0]
+    );
+    return res.json(r.rows[0]);
   } catch (err) {
     console.error("CREATE PRODUCT ERROR:", err);
     return res.status(500).json({ message: "Gagal menambahkan produk" });
@@ -221,9 +282,15 @@ app.post("/api/products", authMiddleware, adminOnly, async (req, res) => {
 
 app.put("/api/products/:id", authMiddleware, adminOnly, async (req, res) => {
   try {
-    const { name, price, category, desc } = req.body;
-    await query("UPDATE products SET name=$1, price=$2, category=$3, description=$4 WHERE id=$5", [name, price, category, desc, req.params.id]);
-    return res.json({ message: "Produk diupdate" });
+    const id = Number(req.params.id);
+    const { name, price, category, desc, stock } = req.body;
+    if (!name) return res.status(400).json({ message: "Nama produk wajib" });
+    const r = await query(
+      "UPDATE products SET name=$1, price=$2, category=$3, description=$4, stock=$5 WHERE id=$6 RETURNING id, name, price, category, description AS desc, COALESCE(stock,0) AS stock",
+      [name, price || 0, category || "", desc || "", Number.isFinite(stock) ? stock : 0, id]
+    );
+    if (r.rowCount === 0) return res.status(404).json({ message: "Produk tidak ditemukan" });
+    return res.json(r.rows[0]);
   } catch (err) {
     console.error("UPDATE PRODUCT ERROR:", err);
     return res.status(500).json({ message: "Gagal mengupdate produk" });
@@ -244,10 +311,14 @@ app.delete("/api/products/:id", authMiddleware, adminOnly, async (req, res) => {
 app.post("/api/orders", async (req, res) => {
   try {
     const { items, subtotal, fee, total, paymentMethod } = req.body;
-    // If orders table has created_at with default NOW(), this works fine.
+
+    // generate order_id to satisfy NOT NULL constraint if present
+    const orderId = 'ORD' + Date.now() + (Math.floor(Math.random() * 9000) + 1000);
+
     const r = await query(
-      "INSERT INTO orders (items, subtotal, fee, total, payment_method, created_at) VALUES ($1,$2,$3,$4,$5,NOW()) RETURNING *",
-      [JSON.stringify(items), subtotal, fee, total, paymentMethod]
+      `INSERT INTO orders (order_id, items, subtotal, fee, total, payment_method, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING id, order_id, items, subtotal, fee, total, payment_method, created_at`,
+      [orderId, JSON.stringify(items), subtotal, fee, total, paymentMethod]
     );
     return res.json(r.rows[0]);
   } catch (err) {
@@ -259,7 +330,7 @@ app.post("/api/orders", async (req, res) => {
 app.get("/api/orders", authMiddleware, adminOnly, async (_req, res) => {
   try {
     // Return orders with created_at (if present)
-    const r = await query("SELECT id, items, subtotal, fee, total, payment_method, created_at FROM orders ORDER BY COALESCE(created_at, NOW()) DESC");
+    const r = await query("SELECT id, order_id, items, subtotal, fee, total, payment_method, created_at FROM orders ORDER BY COALESCE(created_at, NOW()) DESC");
     return res.json(r.rows);
   } catch (err) {
     console.error("GET ORDERS ERROR:", err);
