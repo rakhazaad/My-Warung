@@ -36,7 +36,10 @@
   <div class="container">
     <div class="d-flex align-items-center justify-content-between mb-3">
       <h3 class="mb-0">My Warung</h3>
-      <div class="small-muted">Operator: <strong>Nell</strong></div>
+      <div class="d-flex align-items-center gap-3">
+        <div class="small-muted">Operator: <strong>Nell</strong></div>
+        <button id="logoutBtn" class="btn btn-outline-danger btn-sm">Log Out</button>
+      </div>
     </div>
 
     <div class="row g-4">
@@ -244,11 +247,25 @@
       window.location.href = 'receipt.html';
     }
 
+    // ======= Logout =======
+    function doLogout(){
+      if(confirm('Yakin ingin keluar? Data keranjang akan hilang.')){
+        // Hapus data sesi/login jika ada
+        localStorage.removeItem('user_session');
+        localStorage.removeItem('logged_in_user');
+        // Bersihkan keranjang
+        clearCart();
+        // Arahkan ke halaman login (di root folder)
+        window.location.href = '../login.html';
+      }
+    }
+
     // ======= UI events =======
     document.getElementById('checkoutBtn').addEventListener('click', doCheckout);
     document.getElementById('openCartBtn').addEventListener('click', ()=>{ window.location.href = 'cart.html'; });
     document.getElementById('clearCart').addEventListener('click', ()=>{ if(confirm('Kosongkan keranjang?')) clearCart(); renderCart(); });
     document.getElementById('clearSearch').addEventListener('click', ()=>{ document.getElementById('search').value=''; document.getElementById('category').value='all'; loadProducts(); });
+    document.getElementById('logoutBtn').addEventListener('click', doLogout);
 
     paymentMethodEl.addEventListener('change', updateTotals);
     document.getElementById('search').addEventListener('input', (e)=>{
