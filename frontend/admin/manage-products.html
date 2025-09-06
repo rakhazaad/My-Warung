@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kelola Produk — Admin</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background:#f4f7fb; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; padding:1.25rem; }
+    .card { border-radius: 1rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h3 class="mb-0">Kelola Produk</h3>
+      <button id="logoutBtn" class="btn btn-outline-secondary btn-sm">Keluar</button>
+    </div>
+
+    <!-- Tombol Tambah Produk -->
+    <div class="mb-3">
+      <button id="addProductBtn" class="btn btn-primary">Tambah Produk</button>
+    </div>
+
+    <!-- Tabel Produk -->
+    <div class="card">
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-striped table-hover align-middle">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Nama Produk</th>
+                <th>Harga</th>
+                <th>Stok</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="productTableBody">
+              <tr><td colspan="5" class="text-center">Memuat data...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const token = localStorage.getItem("token");
+  const role = localStorage.getItem("role");
+
+  // Cek token & role
+  if (!token || role !== "admin") {
+    alert("Anda tidak memiliki akses.");
+    window.location.href = "../login.html";
+  }
+
+  document.getElementById("logoutBtn").addEventListener("click", () => {
+    localStorage.clear();
+    window.location.href = "../login.html";
+  });
+
+  // Fungsi Format Rupiah
+  function formatRp(n){
+    if(!Number.isFinite(n)) n = 0;
+    return 'Rp ' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  }
+
+  async function loadProducts(){
+    try {
+      const res = await fetch("/api/products", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          alert("Sesi login sudah berakhir. Silakan login ulang.");
+          localStorage.clear();
+          window.location.href = "../login.html";
+          return;
+        }
+        throw new Error("Gagal memuat produk");
+      }
+
+      const products = await res.json();
+      const tbody = document.getElementById("productTableBody");
+      tbody.innerHTML = "";
+
+      if (products.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">Belum ada produk</td></tr>`;
+        return;
+      }
+
+      products.forEach((p, i) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${i+1}</td>
+          <td>${p.name}</td>
+          <td>${formatRp(p.price)}</td>
+          <td>${p.stock}</td>
+          <td>
+            <button class="btn btn-sm btn-warning me-1" onclick="editProduct('${p.id}')">Edit</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteProduct('${p.id}')">Hapus</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    } catch (err) {
+      console.error("Error loadProducts:", err);
+    }
+  }
+
+  async function deleteProduct(id){
+    if(!confirm("Yakin ingin menghapus produk ini?")) return;
+    try {
+      const res = await fetch(`/api/products/${id}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Gagal menghapus produk");
+      loadProducts();
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan saat menghapus produk");
+    }
+  }
+
+  function editProduct(id){
+    // Bisa diarahkan ke halaman edit atau popup form
+    alert("Fitur edit produk belum diimplementasi. ID: " + id);
+  }
+
+  // Tombol Tambah Produk (contoh redirect)
+  document.getElementById("addProductBtn").addEventListener("click", () => {
+    window.location.href = "add-product.html"; // pastikan file ini ada
+  });
+
+  // Load data awal
+  loadProducts();
+</script>
+</body>
+</html>

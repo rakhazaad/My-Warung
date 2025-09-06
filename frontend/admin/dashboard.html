@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard — Admin</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background:#f4f7fb; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; padding:1.25rem; }
+    .card-stat { border:1px solid #e6eef8; border-radius:1rem; transition:.15s; }
+    .card-stat:hover { box-shadow:0 8px 24px rgba(0,0,0,.05); transform:translateY(-3px); }
+    .stat-value { font-size:1.5rem; font-weight:700; }
+    .nav-link.active { font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h3 class="mb-0">Dashboard Admin</h3>
+      <div>
+        <button id="logoutBtn" class="btn btn-outline-secondary btn-sm">Keluar</button>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="row g-3 mb-4">
+      <div class="col-md-3">
+        <div class="card card-stat p-3">
+          <div class="small text-muted">Total Produk</div>
+          <div id="totalProducts" class="stat-value">0</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card card-stat p-3">
+          <div class="small text-muted">Total Pengguna</div>
+          <div id="totalUsers" class="stat-value">0</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card card-stat p-3">
+          <div class="small text-muted">Transaksi Hari Ini</div>
+          <div id="totalOrders" class="stat-value">0</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card card-stat p-3">
+          <div class="small text-muted">Pendapatan Hari Ini</div>
+          <div id="totalRevenue" class="stat-value">Rp 0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Links -->
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="card h-100">
+          <div class="card-body">
+            <h5 class="card-title">Kelola Produk</h5>
+            <p class="card-text text-muted">Tambah, ubah, atau hapus produk.</p>
+            <a href="manage-products.html" class="btn btn-primary btn-sm">Buka</a>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card h-100">
+          <div class="card-body">
+            <h5 class="card-title">Kelola Pengguna</h5>
+            <p class="card-text text-muted">Atur akun kasir & admin.</p>
+            <a href="manage-users.html" class="btn btn-primary btn-sm">Buka</a>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card h-100">
+          <div class="card-body">
+            <h5 class="card-title">Laporan</h5>
+            <p class="card-text text-muted">Lihat penjualan harian, mingguan, dan bulanan.</p>
+            <a href="reports.html" class="btn btn-primary btn-sm">Buka</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const token = localStorage.getItem("token");
+  const role = localStorage.getItem("role");
+
+  if (!token || role !== "admin") {
+    alert("Anda tidak memiliki akses.");
+    window.location.href = "../login.html";
+  }
+
+  document.getElementById("logoutBtn").addEventListener("click", () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("role");
+    window.location.href = "../login.html";
+  });
+
+  function formatRp(n){
+    if(!Number.isFinite(n)) n = 0;
+    return 'Rp ' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  }
+
+  async function loadStats(){
+    try {
+      const res = await fetch("/api/admin/stats", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+
+      if (!res.ok) {
+        if (res.status === 403 || res.status === 401) {
+          alert("Sesi login sudah berakhir. Silakan login ulang.");
+          localStorage.clear();
+          window.location.href = "../login.html";
+          return;
+        }
+        throw new Error("Gagal memuat statistik");
+      }
+
+      const data = await res.json();
+      document.getElementById('totalProducts').textContent = data.totalProducts || 0;
+      document.getElementById('totalUsers').textContent = data.totalUsers || 0;
+      document.getElementById('totalOrders').textContent = data.totalOrdersToday || 0;
+      document.getElementById('totalRevenue').textContent = formatRp(data.totalRevenueToday || 0);
+    } catch (err) {
+      console.error("Gagal memuat statistik:", err);
+    }
+  }
+
+  loadStats();
+</script>
+</body>
+</html>
