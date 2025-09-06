@@ -36,9 +36,15 @@
   <div class="container">
     <div class="d-flex align-items-center justify-content-between mb-3">
       <h3 class="mb-0">My Warung</h3>
+<<<<<<< HEAD
       <div class="d-flex align-items-center gap-2">
         <div class="small-muted">Operator: <strong>Nell</strong></div>
         <button id="logoutBtn" class="btn btn-outline-secondary btn-sm">Logout</button>
+=======
+      <div class="d-flex align-items-center gap-3">
+        <div class="small-muted">Operator: <strong>Nell</strong></div>
+        <button id="logoutBtn" class="btn btn-outline-danger btn-sm">Log Out</button>
+>>>>>>> 8ddaf7d1a99e586dd9710586815baed0cab0f89b
       </div>
     </div>
 
@@ -262,6 +268,7 @@
     }
 
     // ======= Logout =======
+<<<<<<< HEAD
     document.getElementById('logoutBtn').addEventListener('click', ()=>{
       // hapus credential yang mungkin tersimpan
       localStorage.removeItem('token');
@@ -276,12 +283,26 @@
       console.log('Redirecting to:', loginUrl);
       window.location.href = loginUrl;
     });
+=======
+    function doLogout(){
+      if(confirm('Yakin ingin keluar? Data keranjang akan hilang.')){
+        // Hapus data sesi/login jika ada
+        localStorage.removeItem('user_session');
+        localStorage.removeItem('logged_in_user');
+        // Bersihkan keranjang
+        clearCart();
+        // Arahkan ke halaman login (di root folder)
+        window.location.href = '../login.html';
+      }
+    }
+>>>>>>> 8ddaf7d1a99e586dd9710586815baed0cab0f89b
 
     // ======= UI events =======
     document.getElementById('checkoutBtn').addEventListener('click', doCheckout);
     document.getElementById('openCartBtn').addEventListener('click', ()=>{ window.location.href = './cart.html'; });
     document.getElementById('clearCart').addEventListener('click', ()=>{ if(confirm('Kosongkan keranjang?')) { clearCart(); renderCart(); } });
     document.getElementById('clearSearch').addEventListener('click', ()=>{ document.getElementById('search').value=''; document.getElementById('category').value='all'; loadProducts(); });
+    document.getElementById('logoutBtn').addEventListener('click', doLogout);
 
     paymentMethodEl.addEventListener('change', updateTotals);
     document.getElementById('search').addEventListener('input', (e)=>{
