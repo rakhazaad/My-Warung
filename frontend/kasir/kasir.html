@@ -36,15 +36,9 @@
   <div class="container">
     <div class="d-flex align-items-center justify-content-between mb-3">
       <h3 class="mb-0">My Warung</h3>
-<<<<<<< HEAD
-      <div class="d-flex align-items-center gap-2">
-        <div class="small-muted">Operator: <strong>Nell</strong></div>
-        <button id="logoutBtn" class="btn btn-outline-secondary btn-sm">Logout</button>
-=======
       <div class="d-flex align-items-center gap-3">
         <div class="small-muted">Operator: <strong>Nell</strong></div>
         <button id="logoutBtn" class="btn btn-outline-danger btn-sm">Log Out</button>
->>>>>>> 8ddaf7d1a99e586dd9710586815baed0cab0f89b
       </div>
     </div>
 
@@ -136,7 +130,7 @@
         col.innerHTML = `
           <div class="p-2 product-card h-100" data-id="${p.id}">
             <div class="fw-semibold">${p.name}</div>
-            <div class="muted-xs">${p.desc || p.description || ''}</div>
+            <div class="muted-xs">${p.desc || ''}</div>
             <div class="d-flex justify-content-between align-items-center mt-2">
               <div class="price">${formatRp(p.price)}</div>
               <button class="btn btn-sm btn-outline-primary add-btn">Tambah</button>
@@ -235,55 +229,25 @@
     }
 
     // ======= Checkout =======
-    async function doCheckout(){
+    function doCheckout(){
       const cart = loadCart();
       if(cart.length === 0){ alert('Keranjang kosong'); return; }
       const subtotal = calcSubtotal(cart);
       const fee = Number(paymentMethodEl.selectedOptions[0].dataset.fee || 0);
       const total = subtotal + fee;
-      const payload = { items: cart, subtotal, fee, total, paymentMethod: paymentMethodEl.value };
-
-      try {
-        const res = await fetch('/api/orders', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        if (!res.ok) {
-          const err = await res.json().catch(()=>({ message: 'Gagal menyimpan order' }));
-          throw new Error(err.message || 'Gagal menyimpan order');
-        }
-
-        const created = await res.json();
-        // Simpan order yang dikembalikan server supaya receipt menggunakan data server (termasuk created_at)
-        localStorage.setItem(LAST_ORDER_KEY, JSON.stringify(created));
-        clearCart();
-        // Pastikan path relatif ke receipt yang ada di folder yang sama (kasir/receipt.html)
-        window.location.href = './receipt.html';
-      } catch (err) {
-        console.error('Checkout error:', err);
-        alert('Gagal menyimpan order ke server. Coba lagi.');
-      }
+      const order = {
+        id: 'ORD' + Date.now(),
+        date: new Date().toISOString(),
+        items: cart,
+        subtotal, fee, total,
+        paymentMethod: paymentMethodEl.value
+      };
+      localStorage.setItem(LAST_ORDER_KEY, JSON.stringify(order));
+      clearCart();
+      window.location.href = 'receipt.html';
     }
 
     // ======= Logout =======
-<<<<<<< HEAD
-    document.getElementById('logoutBtn').addEventListener('click', ()=>{
-      // hapus credential yang mungkin tersimpan
-      localStorage.removeItem('token');
-      localStorage.removeItem('role');
-
-      // Debug log supaya mudah lihat target URL di console
-      console.log('Logout clicked. current location:', window.location.href);
-
-      // Karena file kasir berada di folder /kasir/, kita arahkan ke login di root frontend.
-      // Menggunakan URL relatif '../login.html' agar robust ketika kasir.html berada di subfolder.
-      const loginUrl = new URL('../login.html', window.location.href).href;
-      console.log('Redirecting to:', loginUrl);
-      window.location.href = loginUrl;
-    });
-=======
     function doLogout(){
       if(confirm('Yakin ingin keluar? Data keranjang akan hilang.')){
         // Hapus data sesi/login jika ada
@@ -295,12 +259,11 @@
         window.location.href = '../login.html';
       }
     }
->>>>>>> 8ddaf7d1a99e586dd9710586815baed0cab0f89b
 
     // ======= UI events =======
     document.getElementById('checkoutBtn').addEventListener('click', doCheckout);
-    document.getElementById('openCartBtn').addEventListener('click', ()=>{ window.location.href = './cart.html'; });
-    document.getElementById('clearCart').addEventListener('click', ()=>{ if(confirm('Kosongkan keranjang?')) { clearCart(); renderCart(); } });
+    document.getElementById('openCartBtn').addEventListener('click', ()=>{ window.location.href = 'cart.html'; });
+    document.getElementById('clearCart').addEventListener('click', ()=>{ if(confirm('Kosongkan keranjang?')) clearCart(); renderCart(); });
     document.getElementById('clearSearch').addEventListener('click', ()=>{ document.getElementById('search').value=''; document.getElementById('category').value='all'; loadProducts(); });
     document.getElementById('logoutBtn').addEventListener('click', doLogout);
 
@@ -311,7 +274,7 @@
       fetch(API_URL)
         .then(res=>res.json())
         .then(data=>{
-          let filtered = data.filter(p => p.name.toLowerCase().includes(q) || (p.desc||p.description||'').toLowerCase().includes(q));
+          let filtered = data.filter(p => p.name.toLowerCase().includes(q) || (p.desc||'').toLowerCase().includes(q));
           if(cat !== 'all') filtered = filtered.filter(p => p.category === cat);
           renderProducts(filtered);
         });
